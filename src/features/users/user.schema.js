@@ -28,4 +28,7 @@ const userSchema = new mongoose.Schema({
   tokenVersion: { type: Number, default: 0 },
 });
 
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ name: 1 });
+
 export default userSchema;

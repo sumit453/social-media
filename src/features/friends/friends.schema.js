@@ -12,6 +12,7 @@ const friendsSchema = new mongoose.Schema({
   status: {
     type: String,
     default: "Panding",
+    enum: ["pending", "accepted", "rejected"],
   },
 });
 
