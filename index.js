@@ -50,7 +50,7 @@ server.use((req, res) => {
   res
     .status(404)
     .send(
-      "API not found. Please check our docomentation for more information (http://localhost:3200/api-docs/)"
+      "API not found. Please check our docomentation for more information (http://localhost:3000/api-docs/)"
     );
 });
 

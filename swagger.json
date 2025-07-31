@@ -13,15 +13,10 @@
     "description": "Database Schema Reference",
     "url": "https://github.com/sumit453/social-media.git"
   },
-
   "servers": [
     {
       "url": "http://localhost:3000",
       "description": "Development server"
-    },
-    {
-      "url": "https://api.your-app.com",
-      "description": "Production server"
     }
   ],
   "components": {
@@ -50,22 +45,19 @@
           },
           "age": { "type": "integer", "example": 28 },
           "gender": { "type": "string", "example": "male" },
-          "posts": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Post" }
-          },
           "friends": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/User" }
           },
           "friendRequestSend": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/FriendRequest" }
+            "items": { "$ref": "#/components/schemas/Friend" }
           },
-          "friendRequestReceived": {
+          "friendRequestRecived": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/FriendRequest" }
-          }
+            "items": { "$ref": "#/components/schemas/Friend" }
+          },
+          "tokenVersion": { "type": "integer", "example": 0 }
         }
       },
       "Post": {
@@ -102,12 +94,11 @@
         "type": "object",
         "properties": {
           "_id": { "type": "string" },
-          "user": { "$ref": "#/components/schemas/User" },
+          "user": { "$ref": "#/components/schemas/SimpleUser" },
           "post": { "$ref": "#/components/schemas/Post" },
           "comment": { "$ref": "#/components/schemas/Comment" }
         }
       },
-
       "Comment": {
         "type": "object",
         "properties": {
@@ -115,10 +106,12 @@
           "comment": { "type": "string" },
           "user": { "$ref": "#/components/schemas/SimpleUser" },
           "post": { "$ref": "#/components/schemas/Post" },
-          "likes": { "$ref": "#/components/schemas/Like" }
+          "likes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Like" }
+          }
         }
       },
-
       "Friend": {
         "type": "object",
         "properties": {
@@ -129,8 +122,19 @@
           "reciverEmail": { "type": "string" },
           "status": {
             "type": "string",
-            "enum": ["pending", "accepted", "rejected"]
+            "enum": ["pending", "accepted", "rejected"],
+            "example": "pending"
           }
+        }
+      },
+      "OTP": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string" },
+          "userName": { "type": "string" },
+          "otp": { "type": "integer" },
+          "email": { "type": "string" },
+          "expiredAt": { "type": "string", "format": "date-time" }
         }
       },
       "Error": {
@@ -141,7 +145,6 @@
           "details": { "type": "array", "items": { "type": "string" } }
         }
       },
-
       "SimpleUser": {
         "type": "object",
         "properties": {
@@ -159,14 +162,20 @@
         "summary": "Register new user",
         "requestBody": {
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": ["name", "email", "password"],
+                "required": ["name", "email", "password", "age", "gender"],
                 "properties": {
                   "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" },
                   "age": { "type": "integer" },
-                  "gender": { "type": "string" }
+                  "gender": { "type": "string" },
+                  "profilepicture": {
+                    "type": "string",
+                    "format": "binary"
+                  }
                 }
               }
             }
@@ -177,9 +186,7 @@
             "description": "User created",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/User"
-                }
+                "schema": { "$ref": "#/components/schemas/User" }
               }
             }
           },
@@ -187,9 +194,7 @@
             "description": "Validation error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
+                "schema": { "$ref": "#/components/schemas/Error" }
               }
             }
           }
@@ -207,7 +212,7 @@
                 "type": "object",
                 "required": ["email", "password"],
                 "properties": {
-                  "email": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
                   "password": { "type": "string" }
                 }
               }
@@ -240,14 +245,86 @@
         }
       }
     },
-    "/api/users/profile": {
+    "/api/users/get-details/{userId}": {
       "get": {
         "tags": ["Users"],
-        "summary": "Get current user profile",
+        "summary": "Get user details by ID",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/users/get-all-details": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get all users",
         "security": [{ "JWT": [] }],
         "responses": {
           "200": {
-            "description": "User profile",
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/User" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/update-details/{userId}": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update user details",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "age": { "type": "integer" },
+                  "gender": { "type": "string" },
+                  "profilepicture": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/User" }
@@ -257,53 +334,50 @@
         }
       }
     },
-    "/api/posts": {
-      "get": {
-        "tags": ["Posts"],
-        "summary": "Get paginated posts",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number",
-            "schema": { "type": "integer", "default": 1 }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Items per page",
-            "schema": { "type": "integer", "default": 10 }
-          }
-        ],
+    "/api/users/logout": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Logout current session",
+        "security": [{ "JWT": [] }],
         "responses": {
           "200": {
-            "description": "Paginated posts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "total": { "type": "integer" },
-                    "pages": { "type": "integer" },
-                    "results": {
-                      "type": "array",
-                      "items": { "$ref": "#/components/schemas/Post" }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Logged out successfully"
           }
         }
-      },
+      }
+    },
+    "/api/users/logout-all-devices": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Logout all sessions",
+        "security": [{ "JWT": [] }],
+        "responses": {
+          "200": {
+            "description": "All sessions logged out"
+          }
+        }
+      }
+    },
+    "/api/post": {
       "post": {
         "tags": ["Posts"],
         "summary": "Create new post",
         "security": [{ "JWT": [] }],
         "requestBody": {
           "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/Post" }
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["caption", "content"],
+                "properties": {
+                  "caption": { "type": "string" },
+                  "content": { "type": "string" },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
             }
           }
         },
@@ -317,15 +391,54 @@
             }
           }
         }
-      }
-    },
-    "/api/posts/{id}": {
+      },
       "get": {
         "tags": ["Posts"],
-        "summary": "Get single post",
+        "summary": "Get all posts",
+        "security": [{ "JWT": [] }],
+        "responses": {
+          "200": {
+            "description": "List of posts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Post" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/post/all": {
+      "get": {
+        "tags": ["Posts"],
+        "summary": "Get all posts of current user",
+        "security": [{ "JWT": [] }],
+        "responses": {
+          "200": {
+            "description": "User's posts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Post" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/post/{postId}": {
+      "get": {
+        "tags": ["Posts"],
+        "summary": "Get single post by ID",
+        "security": [{ "JWT": [] }],
         "parameters": [
           {
-            "name": "id",
+            "name": "postId",
             "in": "path",
             "required": true,
             "schema": { "type": "string" }
@@ -348,33 +461,50 @@
         "security": [{ "JWT": [] }],
         "parameters": [
           {
-            "name": "id",
+            "name": "postId",
             "in": "path",
             "required": true,
             "schema": { "type": "string" }
           }
         ],
         "responses": {
-          "204": { "description": "Post deleted" }
+          "204": {
+            "description": "Post deleted"
+          }
         }
-      }
-    },
-    "/api/posts/{id}/like": {
-      "post": {
+      },
+      "put": {
         "tags": ["Posts"],
-        "summary": "Like/unlike post",
+        "summary": "Update post",
         "security": [{ "JWT": [] }],
         "parameters": [
           {
-            "name": "id",
+            "name": "postId",
             "in": "path",
             "required": true,
             "schema": { "type": "string" }
           }
         ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caption": { "type": "string" },
+                  "content": { "type": "string" },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Like status updated",
+            "description": "Post updated",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Post" }
@@ -384,14 +514,114 @@
         }
       }
     },
-    "/api/posts/{id}/comments": {
-      "post": {
+    "/api/post/filterpost": {
+      "get": {
         "tags": ["Posts"],
-        "summary": "Add comment",
+        "summary": "Filter posts",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered posts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Post" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/likes/{id}": {
+      "post": {
+        "tags": ["Likes"],
+        "summary": "Add like to post/comment",
         "security": [{ "JWT": [] }],
         "parameters": [
           {
             "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Post ID or Comment ID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like added",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Like" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Likes"],
+        "summary": "Get likes for post/comment",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Post ID or Comment ID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of likes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Like" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/likes/{likeId}": {
+      "delete": {
+        "tags": ["Likes"],
+        "summary": "Remove like",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "likeId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like removed"
+          }
+        }
+      }
+    },
+    "/api/comments/{postId}": {
+      "post": {
+        "tags": ["Comments"],
+        "summary": "Add comment to post",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "postId",
             "in": "path",
             "required": true,
             "schema": { "type": "string" }
@@ -402,8 +632,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": ["comment"],
                 "properties": {
-                  "text": { "type": "string" }
+                  "comment": { "type": "string" }
                 }
               }
             }
@@ -414,9 +645,301 @@
             "description": "Comment added",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Post" }
+                "schema": { "$ref": "#/components/schemas/Comment" }
               }
             }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Comments"],
+        "summary": "Get comments for post",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Comment" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/comments/{commentId}": {
+      "delete": {
+        "tags": ["Comments"],
+        "summary": "Delete comment",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment deleted"
+          }
+        }
+      },
+      "put": {
+        "tags": ["Comments"],
+        "summary": "Update comment",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["comment"],
+                "properties": {
+                  "comment": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comment updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Comment" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/otp/send": {
+      "post": {
+        "tags": ["OTP"],
+        "summary": "Send password reset OTP",
+        "security": [{ "JWT": [] }],
+        "responses": {
+          "200": {
+            "description": "OTP sent successfully"
+          }
+        }
+      }
+    },
+    "/api/otp/verify": {
+      "post": {
+        "tags": ["OTP"],
+        "summary": "Verify reset password OTP",
+        "security": [{ "JWT": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["otp"],
+                "properties": {
+                  "otp": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP verified"
+          }
+        }
+      }
+    },
+    "/api/otp/forgotPassword": {
+      "post": {
+        "tags": ["OTP"],
+        "summary": "Send forgot password OTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP sent"
+          }
+        }
+      }
+    },
+    "/api/otp/forgotPasswordApprove": {
+      "post": {
+        "tags": ["OTP"],
+        "summary": "Verify forgot password OTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["otp", "newPassword"],
+                "properties": {
+                  "otp": { "type": "integer" },
+                  "newPassword": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset successful"
+          }
+        }
+      }
+    },
+    "/api/friends/get-friends/{userId}": {
+      "get": {
+        "tags": ["Friends"],
+        "summary": "Get user's friends",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of friends",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/User" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/get-pending-requests": {
+      "get": {
+        "tags": ["Friends"],
+        "summary": "Get pending friend requests",
+        "security": [{ "JWT": [] }],
+        "responses": {
+          "200": {
+            "description": "Pending requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Friend" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/friends/toggle-friendship/{friendId}": {
+      "get": {
+        "tags": ["Friends"],
+        "summary": "Toggle friendship status",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "friendId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Friendship status updated"
+          }
+        }
+      }
+    },
+    "/api/friends/response-to-request/{friendId}": {
+      "post": {
+        "tags": ["Friends"],
+        "summary": "Respond to friend request",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "friendId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["accepted", "rejected"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request processed"
+          }
+        }
+      }
+    },
+    "/api/friends/{reciverId}": {
+      "post": {
+        "tags": ["Friends"],
+        "summary": "Send friend request",
+        "security": [{ "JWT": [] }],
+        "parameters": [
+          {
+            "name": "reciverId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Friend request sent"
           }
         }
       }
