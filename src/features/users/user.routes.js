@@ -2,6 +2,8 @@ import express from "express";
 import UserController from "./user.controller.js";
 import uploadFile from "../../middleware/fileupload.middleware.js";
 import jwtAuth from "../../middleware/jwtAuth.middleware.js";
+import signinFormvalidator from "../../middleware/signinFormvalidator.js";
+import signupFormvalidator from "../../middleware/signupFormValidator.js";
 
 const userController = new UserController();
 
@@ -10,12 +12,13 @@ const userRoutes = express.Router();
 userRoutes.post(
   "/signup",
   uploadFile.single("profilepicture"),
+  signupFormvalidator,
   (req, res, next) => {
     userController.singup(req, res, next);
   }
 );
 
-userRoutes.post("/signin", (req, res) => {
+userRoutes.post("/signin", signinFormvalidator, (req, res) => {
   userController.singin(req, res);
 });
 
